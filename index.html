@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Character Card Deck Generator</title>
+  <style>
+    :root {
+      --bg: #0c1017;
+      --surface: #151c28;
+      --surface2: #1e293b;
+      --border: #2d3a4f;
+      --text: #e8eef7;
+      --text-muted: #94a3b8;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --red: #dc2626;
+      --felt: #0a3328;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .app {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 14px 14px 70px;
+    }
+
+    header {
+      text-align: center;
+      padding: 18px 0 12px;
+    }
+
+    header h1 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #60a5fa, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 0.88rem;
+      margin-top: 4px;
+    }
+
+    .upload-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 11px;
+      padding: 22px 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.18s;
+      background: var(--surface2);
+    }
+
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(59,130,246,0.07);
+    }
+
+    .upload-zone.has-image { padding: 10px; }
+
+    .upload-icon { font-size: 2.1rem; margin-bottom: 6px; opacity: 0.75; }
+    .upload-text { color: var(--text-muted); font-size: 0.9rem; }
+    .upload-text strong { color: var(--accent); }
+
+    #fileInput { display: none; }
+
+    .preview-wrap { display: none; margin-top: 14px; text-align: center; }
+    .preview-wrap.show { display: block; }
+
+    .preview-img {
+      max-width: 130px;
+      max-height: 130px;
+      border-radius: 10px;
+      border: 2px solid var(--border);
+      object-fit: cover;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 11px 18px;
+      border-radius: 9px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.14s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.42; cursor: not-allowed; }
+
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: var(--border); }
+
+    .btn-danger {
+      background: transparent;
+      color: #f87171;
+      border: 1px solid rgba(248,113,113,0.35);
+    }
+    .btn-danger:hover { background: rgba(248,113,113,0.12); }
+
+    .status {
+      text-align: center;
+      padding: 8px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      display: none;
+    }
+    .status.show { display: block; }
+
+    .deck-ui { display: none; }
+    .deck-ui.show { display: block; }
+
+    .controls {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+
+    .control-group { margin-bottom: 12px; }
+    .control-group:last-child { margin-bottom: 0; }
+
+    .control-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-muted);
+      margin-bottom: 7px;
+      font-weight: 600;
+    }
+
+    .suit-picker, .rank-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .suit-btn, .rank-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 9px;
+      border: 2px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      font-size: 1.35rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.14s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+
+    .suit-btn.red { color: #f87171; }
+    .suit-btn.black { color: #cbd5e1; }
+
+    .suit-btn.active, .rank-btn.active {
+      border-color: var(--accent);
+      background: rgba(59,130,246,0.18);
+      box-shadow: 0 0 0 2px rgba(59,130,246,0.25);
+    }
+
+    .rank-btn {
+      font-size: 0.95rem;
+      width: 40px;
+      height: 40px;
+    }
+
+    .card-stage {
+      background: var(--felt);
+      border-radius: 14px;
+      padding: 18px 12px;
+      margin-bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      border: 1px solid #14532d;
+      position: relative;
+    }
+
+    .card-stage::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 30%, rgba(255,255,255,0.04), transparent 65%);
+      pointer-events: none;
+      border-radius: 14px;
+    }
+
+    #cardCanvas {
+      width: 240px;
+      height: 336px;
+      border-radius: 10px;
+      box-shadow:
+        0 4px 8px rgba(0,0,0,0.35),
+        0 14px 32px rgba(0,0,0,0.45);
+      background: #f8fafc;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .deck-grid-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+    }
+
+    .section-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .section-title span {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
+    .deck-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+      gap: 7px;
+    }
+
+    .mini-card {
+      aspect-ratio: 5 / 7;
+      background: #f8fafc;
+      border-radius: 5px;
+      position: relative;
+      cursor: pointer;
+      overflow: hidden;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      transition: transform 0.13s, box-shadow 0.13s;
+      border: 2px solid transparent;
+    }
+
+    .mini-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 12px rgba(0,0,0,0.4);
+    }
+
+    .mini-card.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(59,130,246,0.35);
+    }
+
+    .mini-card .mini-corner {
+      position: absolute;
+      top: 2px;
+      left: 3px;
+      font-size: 0.58rem;
+      font-weight: 700;
+      line-height: 1.05;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: Georgia, serif;
+    }
+
+    .mini-card.red .mini-corner { color: #dc2626; }
+    .mini-card.black .mini-corner { color: #1e293b; }
+
+    .mini-card .mini-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0.22;
+    }
+
+    .mini-card .mini-pips {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.35rem;
+      opacity: 0.9;
+      pointer-events: none;
+      font-weight: 700;
+    }
+
+    .mini-card.red .mini-pips { color: #dc2626; }
+    .mini-card.black .mini-pips { color: #1e293b; }
+
+    .footer-note {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      margin-top: 20px;
+      padding: 0 10px;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.25);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 0.65s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 420px) {
+      #cardCanvas { width: 200px; height: 280px; }
+      .suit-btn { width: 40px; height: 40px; }
+      .rank-btn { width: 36px; height: 36px; font-size: 0.88rem; }
+      .deck-grid { grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>🃏 Character Card Deck</h1>
+      <p>Upload a character → classic cards with your image as the base</p>
+    </header>
+
+    <section class="upload-section" id="uploadSection">
+      <div class="upload-zone" id="uploadZone">
+        <div class="upload-icon">📷</div>
+        <div class="upload-text">
+          <strong>Tap to upload</strong> or drop an image<br>
+          <span style="font-size:0.82em">Clear portrait or character works best</span>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" />
+      </div>
+
+      <div class="preview-wrap" id="previewWrap">
+        <img id="previewImg" class="preview-img" alt="Preview" />
+        <div class="btn-row">
+          <button class="btn-primary" id="generateBtn" disabled>Generate Full Deck</button>
+          <button class="btn-danger" id="clearBtn">Clear</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="status" id="status"></div>
+
+    <div class="deck-ui" id="deckUI">
+      <div class="controls">
+        <div class="control-group">
+          <div class="control-label">Suit</div>
+          <div class="suit-picker" id="suitPicker">
+            <button class="suit-btn red active" data-suit="hearts" title="Hearts">♥</button>
+            <button class="suit-btn red" data-suit="diamonds" title="Diamonds">♦</button>
+            <button class="suit-btn black" data-suit="spades" title="Spades">♠</button>
+            <button class="suit-btn black" data-suit="clubs" title="Clubs">♣</button>
+          </div>
+        </div>
+        <div class="control-group">
+          <div class="control-label">Rank</div>
+          <div class="rank-picker" id="rankPicker"></div>
+        </div>
+      </div>
+
+      <div class="card-stage">
+        <canvas id="cardCanvas" width="750" height="1050"></canvas>
+        <div class="card-actions">
+          <button class="btn-primary" id="downloadBtn">⬇ Download PNG</button>
+          <button class="btn-secondary" id="randomBtn">🎲 Random</button>
+        </div>
+      </div>
+
+      <div class="deck-grid-section">
+        <div class="section-title">
+          Full Pack
+          <span>Tap any card</span>
+        </div>
+        <div class="deck-grid" id="deckGrid"></div>
+      </div>
+    </div>
+
+    <p class="footer-note">
+      Generated entirely in your browser. Nothing leaves your device.
+    </p>
+  </div>
+
+  <script>
+    // ===================== CONSTANTS =====================
+    const SUITS = [
+      { id: "hearts",   symbol: "♥", color: "red",   hex: "#dc2626" },
+      { id: "diamonds", symbol: "♦", color: "red",   hex: "#dc2626" },
+      { id: "spades",   symbol: "♠", color: "black", hex: "#1e293b" },
+      { id: "clubs",    symbol: "♣", color: "black", hex: "#1e293b" }
+    ];
+
+    const RANKS = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+
+    // Pip layouts matched to the reference images (especially 8, 9, 10)
+    const PIP_LAYOUTS = {
+      "A":  [[0.50, 0.50]],
+      "2":  [[0.50, 0.20], [0.50, 0.80, true]],
+      "3":  [[0.50, 0.18], [0.50, 0.50], [0.50, 0.82, true]],
+      "4":  [[0.30, 0.20], [0.70, 0.20],
+             [0.30, 0.80, true], [0.70, 0.80, true]],
+      "5":  [[0.30, 0.20], [0.70, 0.20],
+             [0.50, 0.50],
+             [0.30, 0.80, true], [0.70, 0.80, true]],
+      "6":  [[0.30, 0.20], [0.70, 0.20],
+             [0.30, 0.50], [0.70, 0.50],
+             [0.30, 0.80, true], [0.70, 0.80, true]],
+      // 7
+      "7":  [[0.30, 0.16], [0.70, 0.16],
+             [0.50, 0.32],
+             [0.30, 0.50], [0.70, 0.50],
+             [0.30, 0.84, true], [0.70, 0.84, true]],
+      // 8 – staggered layout from reference (top pair, center, mid pair, inverted center, bottom pair)
+      "8":  [[0.30, 0.15], [0.70, 0.15],
+             [0.50, 0.30],
+             [0.30, 0.48], [0.70, 0.48],
+             [0.50, 0.66, true],
+             [0.30, 0.84, true], [0.70, 0.84, true]],
+      // 9 – evenly spaced like the reference image
+      "9":  [[0.30, 0.16], [0.70, 0.16],
+             [0.50, 0.33],
+             [0.30, 0.48], [0.70, 0.48],
+             [0.30, 0.66, true], [0.70, 0.66, true],
+             [0.30, 0.84, true], [0.70, 0.84, true]],
+      // 10 – evenly spaced like the reference image
+      "10": [[0.30, 0.14], [0.70, 0.14],
+             [0.30, 0.30], [0.70, 0.30],
+             [0.50, 0.40],
+             [0.50, 0.58, true],
+             [0.30, 0.70, true], [0.70, 0.70, true],
+             [0.30, 0.86, true], [0.70, 0.86, true]]
+    };
+
+    // ===================== STATE =====================
+    let characterImage = null;
+    let characterDataURL = null;
+    let currentSuit = "hearts";
+    let currentRank = "A";
+
+    // ===================== DOM =====================
+    const uploadZone    = document.getElementById("uploadZone");
+    const fileInput     = document.getElementById("fileInput");
+    const previewWrap   = document.getElementById("previewWrap");
+    const previewImg    = document.getElementById("previewImg");
+    const generateBtn   = document.getElementById("generateBtn");
+    const clearBtn      = document.getElementById("clearBtn");
+    const statusEl      = document.getElementById("status");
+    const deckUI        = document.getElementById("deckUI");
+    const suitPicker    = document.getElementById("suitPicker");
+    const rankPicker    = document.getElementById("rankPicker");
+    const canvas        = document.getElementById("cardCanvas");
+    const ctx           = canvas.getContext("2d");
+    const downloadBtn   = document.getElementById("downloadBtn");
+    const randomBtn     = document.getElementById("randomBtn");
+    const deckGrid      = document.getElementById("deckGrid");
+
+    // ===================== UPLOAD =====================
+    uploadZone.addEventListener("click", () => fileInput.click());
+    uploadZone.addEventListener("dragover", e => { e.preventDefault(); uploadZone.classList.add("dragover"); });
+    uploadZone.addEventListener("dragleave", () => uploadZone.classList.remove("dragover"));
+    uploadZone.addEventListener("drop", e => {
+      e.preventDefault();
+      uploadZone.classList.remove("dragover");
+      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files.length) handleFile(fileInput.files[0]);
+    });
+
+    function handleFile(file) {
+      if (!file.type.startsWith("image/")) {
+        setStatus("Please choose an image file.", true);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = e => {
+        characterDataURL = e.target.result;
+        previewImg.src = characterDataURL;
+        previewWrap.classList.add("show");
+        uploadZone.classList.add("has-image");
+        generateBtn.disabled = false;
+
+        characterImage = new Image();
+        characterImage.onload = () => setStatus("Image ready — press Generate Full Deck.", false);
+        characterImage.src = characterDataURL;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    clearBtn.addEventListener("click", () => {
+      characterImage = null;
+      characterDataURL = null;
+      fileInput.value = "";
+      previewWrap.classList.remove("show");
+      uploadZone.classList.remove("has-image");
+      generateBtn.disabled = true;
+      deckUI.classList.remove("show");
+      setStatus("", false);
+    });
+
+    // ===================== GENERATE =====================
+    generateBtn.addEventListener("click", () => {
+      if (!characterImage) return;
+      generateBtn.disabled = true;
+      generateBtn.innerHTML = '<span class="spinner"></span> Building…';
+
+      setTimeout(() => {
+        buildRankPicker();
+        buildDeckGrid();
+        renderCard();
+        deckUI.classList.add("show");
+        generateBtn.innerHTML = "Generate Full Deck";
+        generateBtn.disabled = false;
+        setStatus("Deck ready. Your image is the low-opacity base on every card.", false);
+        deckUI.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 140);
+    });
+
+    // ===================== PICKERS =====================
+    function buildRankPicker() {
+      rankPicker.innerHTML = "";
+      RANKS.forEach(r => {
+        const btn = document.createElement("button");
+        btn.className = "rank-btn" + (r === currentRank ? " active" : "");
+        btn.textContent = r;
+        btn.dataset.rank = r;
+        btn.addEventListener("click", () => {
+          currentRank = r;
+          document.querySelectorAll(".rank-btn").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          renderCard();
+          highlightMiniCard();
+        });
+        rankPicker.appendChild(btn);
+      });
+    }
+
+    suitPicker.querySelectorAll(".suit-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        currentSuit = btn.dataset.suit;
+        document.querySelectorAll(".suit-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        renderCard();
+        highlightMiniCard();
+      });
+    });
+
+    // ===================== MINI GRID =====================
+    function buildDeckGrid() {
+      deckGrid.innerHTML = "";
+      SUITS.forEach(suit => {
+        RANKS.forEach(rank => {
+          const mini = document.createElement("div");
+          mini.className = "mini-card " + suit.color;
+          mini.dataset.suit = suit.id;
+          mini.dataset.rank = rank;
+          mini.title = `${rank} of ${suit.id}`;
+
+          mini.innerHTML = `
+            <img class="mini-img" src="${characterDataURL}" alt="" />
+            <div class="mini-corner">
+              <span>${rank}</span>
+              <span style="font-size:0.72em">${suit.symbol}</span>
+            </div>
+            <div class="mini-pips">${suit.symbol}</div>
+          `;
+
+          mini.addEventListener("click", () => {
+            currentSuit = suit.id;
+            currentRank = rank;
+            document.querySelectorAll(".suit-btn").forEach(b => b.classList.toggle("active", b.dataset.suit === currentSuit));
+            document.querySelectorAll(".rank-btn").forEach(b => b.classList.toggle("active", b.dataset.rank === currentRank));
+            renderCard();
+            highlightMiniCard();
+            document.querySelector(".card-stage").scrollIntoView({ behavior: "smooth", block: "nearest" });
+          });
+
+          deckGrid.appendChild(mini);
+        });
+      });
+      highlightMiniCard();
+    }
+
+    function highlightMiniCard() {
+      document.querySelectorAll(".mini-card").forEach(m => {
+        m.classList.toggle("active", m.dataset.suit === currentSuit && m.dataset.rank === currentRank);
+      });
+    }
+
+    // ===================== RANDOM =====================
+    randomBtn.addEventListener("click", () => {
+      currentSuit = SUITS[Math.floor(Math.random() * 4)].id;
+      currentRank = RANKS[Math.floor(Math.random() * 13)];
+      document.querySelectorAll(".suit-btn").forEach(b => b.classList.toggle("active", b.dataset.suit === currentSuit));
+      document.querySelectorAll(".rank-btn").forEach(b => b.classList.toggle("active", b.dataset.rank === currentRank));
+      renderCard();
+      highlightMiniCard();
+    });
+
+    // ===================== SUIT PATHS (solid filled) =====================
+    function pathHeart(ctx) {
+      ctx.beginPath();
+      ctx.moveTo(0, 0.32);
+      ctx.bezierCurveTo(-0.12, 0.05, -0.52, -0.12, -0.52, -0.42);
+      ctx.bezierCurveTo(-0.52, -0.72, -0.22, -0.82, 0, -0.52);
+      ctx.bezierCurveTo(0.22, -0.82, 0.52, -0.72, 0.52, -0.42);
+      ctx.bezierCurveTo(0.52, -0.12, 0.12, 0.05, 0, 0.32);
+      ctx.closePath();
+    }
+
+    function pathDiamond(ctx) {
+      ctx.beginPath();
+      ctx.moveTo(0, -0.68);
+      ctx.lineTo(0.52, 0);
+      ctx.lineTo(0, 0.68);
+      ctx.lineTo(-0.52, 0);
+      ctx.closePath();
+    }
+
+    function pathSpade(ctx) {
+      ctx.beginPath();
+      ctx.moveTo(0, -0.68);
+      ctx.bezierCurveTo(-0.12, -0.32, -0.58, -0.12, -0.58, 0.22);
+      ctx.bezierCurveTo(-0.58, 0.48, -0.28, 0.52, 0, 0.22);
+      ctx.bezierCurveTo(0.28, 0.52, 0.58, 0.48, 0.58, 0.22);
+      ctx.bezierCurveTo(0.58, -0.12, 0.12, -0.32, 0, -0.68);
+      ctx.closePath();
+      // stem
+      ctx.moveTo(-0.11, 0.22);
+      ctx.lineTo(-0.17, 0.68);
+      ctx.lineTo(0.17, 0.68);
+      ctx.lineTo(0.11, 0.22);
+      ctx.closePath();
+    }
+
+    function pathClub(ctx) {
+      // Crisp traditional club matching the reference images
+      // Three round lobes + short tapered stem
+      ctx.beginPath();
+      // Top lobe
+      ctx.arc(0, -0.36, 0.30, 0, Math.PI * 2);
+      // Left lobe
+      ctx.moveTo(-0.29, 0.15);
+      ctx.arc(-0.29, 0.15, 0.30, 0, Math.PI * 2);
+      // Right lobe
+      ctx.moveTo(0.29, 0.15);
+      ctx.arc(0.29, 0.15, 0.30, 0, Math.PI * 2);
+      // Stem – short, classic proportions from the photos
+      ctx.moveTo(-0.09, 0.30);
+      ctx.lineTo(-0.13, 0.68);
+      ctx.lineTo(0.13, 0.68);
+      ctx.lineTo(0.09, 0.30);
+      ctx.closePath();
+    }
+
+    function getSuitPath(suitId) {
+      if (suitId === "hearts") return pathHeart;
+      if (suitId === "diamonds") return pathDiamond;
+      if (suitId === "spades") return pathSpade;
+      return pathClub;
+    }
+
+    // Draw a solid-colored pip – crisp and clean
+    function drawSolidPip(ctx, suitId, color, cx, cy, size, inverted) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      if (inverted) ctx.rotate(Math.PI);
+      ctx.scale(size, size);
+
+      const pathFn = getSuitPath(suitId);
+      pathFn(ctx);
+      ctx.fillStyle = color;
+      ctx.fill();
+
+      // Clean thin outline for crisp edges
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 0.035;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // ===================== MAIN RENDER =====================
+    function renderCard() {
+      if (!characterImage) return;
+
+      const W = canvas.width;
+      const H = canvas.height;
+      const suitObj = SUITS.find(s => s.id === currentSuit);
+      const color = suitObj.hex;
+      const isFace = ["J","Q","K"].includes(currentRank);
+
+      // 1. White card background
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#f8fafc";
+      roundRect(ctx, 0, 0, W, H, 28);
+      ctx.fill();
+
+      // 2. Full-card character image (centered, low transparency) — always present
+      ctx.save();
+      roundRect(ctx, 0, 0, W, H, 28);
+      ctx.clip();
+      ctx.globalAlpha = 0.20; // low transparency as requested
+      drawImageCover(ctx, characterImage, 0, 0, W, H);
+      ctx.restore();
+
+      // 3. Thin inner border
+      ctx.strokeStyle = "rgba(0,0,0,0.10)";
+      ctx.lineWidth = 3;
+      roundRect(ctx, 10, 10, W - 20, H - 20, 22);
+      ctx.stroke();
+
+      // 4. Corner ranks (always) – inset for larger text
+      drawCornerRank(ctx, currentRank, suitObj.symbol, color, 56, 78, false);
+      drawCornerRank(ctx, currentRank, suitObj.symbol, color, W - 56, H - 78, true);
+
+      // 5. Content
+      if (isFace) {
+        renderFaceCard(ctx, W, H, suitObj, color);
+      } else {
+        renderNumberCard(ctx, W, H, suitObj, color);
+      }
+    }
+
+    function drawCornerRank(ctx, rank, symbol, color, x, y, inverted) {
+      ctx.save();
+      ctx.translate(x, y);
+      if (inverted) ctx.rotate(Math.PI);
+      ctx.fillStyle = color;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      // Bigger corner number + suit
+      ctx.font = "bold 78px Georgia, 'Times New Roman', serif";
+      ctx.fillText(rank, 0, -26);
+      ctx.font = "64px Georgia, serif";
+      ctx.fillText(symbol, 0, 36);
+      ctx.restore();
+    }
+
+    // ---------- Number / Ace cards ----------
+    function renderNumberCard(ctx, W, H, suitObj, color) {
+      const layout = PIP_LAYOUTS[currentRank] || PIP_LAYOUTS["A"];
+      const isAce = currentRank === "A";
+
+      // Pip sizes – 2-10 a little bigger still
+      let baseSize;
+      if (isAce) {
+        baseSize = 250;
+      } else if (currentRank === "10") {
+        baseSize = 104;
+      } else if (["8","9"].includes(currentRank)) {
+        baseSize = 112;
+      } else {
+        baseSize = 124;
+      }
+
+      layout.forEach(([nx, ny, inv]) => {
+        const cx = nx * W;
+        const cy = ny * H;
+        drawSolidPip(ctx, suitObj.id, color, cx, cy, baseSize, !!inv);
+      });
+    }
+
+    // ---------- Face cards (J, Q, K) — traditional double-headed with reflection ----------
+    function renderFaceCard(ctx, W, H, suitObj, color) {
+      const name = currentRank === "J" ? "JACK" : currentRank === "Q" ? "QUEEN" : "KING";
+
+      // Rank name (top + inverted bottom) – about double previous size, no line underneath
+      ctx.fillStyle = color;
+      ctx.font = "bold 68px Georgia, serif";
+      ctx.textAlign = "center";
+      ctx.fillText(name, W / 2, 125);
+      ctx.save();
+      ctx.translate(W / 2, H - 115);
+      ctx.rotate(Math.PI);
+      ctx.fillText(name, 0, 0);
+      ctx.restore();
+
+      // Portrait frame (double-headed)
+      const frameW = 400;
+      const frameH = 640;
+      const frameX = (W - frameW) / 2;
+      const frameY = (H - frameH) / 2;
+      const halfH = (frameH / 2) - 6;
+
+      // Outer frame
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 7;
+      roundRect(ctx, frameX - 5, frameY - 5, frameW + 10, frameH + 10, 12);
+      ctx.stroke();
+
+      ctx.strokeStyle = "rgba(0,0,0,0.12)";
+      ctx.lineWidth = 2.5;
+      roundRect(ctx, frameX, frameY, frameW, frameH, 8);
+      ctx.stroke();
+
+      // --- Top half (normal orientation) ---
+      ctx.save();
+      roundRect(ctx, frameX + 5, frameY + 5, frameW - 10, halfH, 5);
+      ctx.clip();
+      ctx.globalAlpha = 0.92;
+      drawImageCover(ctx, characterImage, frameX + 5, frameY + 5, frameW - 10, halfH);
+      ctx.restore();
+
+      // --- Bottom half (reflected / inverted — classic court card style) ---
+      ctx.save();
+      roundRect(ctx, frameX + 5, frameY + halfH + 12, frameW - 10, halfH, 5);
+      ctx.clip();
+      ctx.translate(frameX + frameW / 2, frameY + halfH + 12 + halfH / 2);
+      ctx.rotate(Math.PI);
+      ctx.globalAlpha = 0.92;
+      drawImageCover(ctx, characterImage, -(frameW - 10) / 2, -halfH / 2, frameW - 10, halfH);
+      ctx.restore();
+
+      // Side suit marks (no center line)
+      ctx.fillStyle = color;
+      ctx.font = "92px Georgia, serif";
+      ctx.textAlign = "center";
+      ctx.fillText(suitObj.symbol, frameX - 38, H / 2 + 10);
+      ctx.fillText(suitObj.symbol, frameX + frameW + 38, H / 2 + 10);
+    }
+
+    // Helper: object-fit: cover
+    function drawImageCover(ctx, img, x, y, w, h) {
+      const imgRatio = img.width / img.height;
+      const boxRatio = w / h;
+      let dw, dh, dx, dy;
+      if (imgRatio > boxRatio) {
+        dh = h;
+        dw = h * imgRatio;
+        dx = x - (dw - w) / 2;
+        dy = y;
+      } else {
+        dw = w;
+        dh = w / imgRatio;
+        dx = x;
+        dy = y - (dh - h) / 2;
+      }
+      ctx.drawImage(img, dx, dy, dw, dh);
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+      if (w < 2 * r) r = w / 2;
+      if (h < 2 * r) r = h / 2;
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    // ===================== DOWNLOAD =====================
+    downloadBtn.addEventListener("click", () => {
+      if (!characterImage) return;
+      const link = document.createElement("a");
+      const filename = `${currentRank}_of_${currentSuit}.png`.toLowerCase();
+      link.download = filename;
+      renderCard();
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    });
+
+    // ===================== STATUS =====================
+    function setStatus(msg, isError) {
+      if (!msg) {
+        statusEl.classList.remove("show");
+        return;
+      }
+      statusEl.textContent = msg;
+      statusEl.style.color = isError ? "#f87171" : "var(--text-muted)";
+      statusEl.classList.add("show");
+    }
+
+    // Init
+    buildRankPicker();
+  </script>
+</body>
+</html>
