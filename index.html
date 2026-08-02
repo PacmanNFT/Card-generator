@@ -414,6 +414,7 @@
         <canvas id="cardCanvas" width="750" height="1050"></canvas>
         <div class="card-actions">
           <button class="btn-primary" id="downloadBtn">⬇ Download PNG</button>
+          <button class="btn-secondary" id="downloadAllBtn">⬇ Full Deck (ZIP)</button>
           <button class="btn-secondary" id="randomBtn">🎲 Random</button>
         </div>
       </div>
@@ -432,6 +433,7 @@
     </p>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script>
     // ===================== CONSTANTS =====================
     const SUITS = [
@@ -502,6 +504,7 @@
     const canvas        = document.getElementById("cardCanvas");
     const ctx           = canvas.getContext("2d");
     const downloadBtn   = document.getElementById("downloadBtn");
+    const downloadAllBtn = document.getElementById("downloadAllBtn");
     const randomBtn     = document.getElementById("randomBtn");
     const deckGrid      = document.getElementById("deckGrid");
 
@@ -913,6 +916,218 @@
       link.href = canvas.toDataURL("image/png");
       link.click();
     });
+
+    // Download full 52-card deck as ZIP
+    downloadAllBtn.addEventListener("click", async () => {
+      if (!characterImage) return;
+      if (typeof JSZip === "undefined") {
+        setStatus("ZIP library failed to load. Check your connection and try again.", true);
+        return;
+      }
+
+      downloadAllBtn.disabled = true;
+      downloadAllBtn.innerHTML = '<span class="spinner"></span> Building ZIP…';
+      setStatus("Generating all 52 cards… this may take a few seconds.", false);
+
+      const zip = new JSZip();
+      const folder = zip.folder("character-card-deck");
+      const originalSuit = currentSuit;
+      const originalRank = currentRank;
+
+      // Use a temporary offscreen canvas so we don't flash the main one
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = 750;
+      tempCanvas.height = 1050;
+      const tempCtx = tempCanvas.getContext("2d");
+
+      // Temporarily swap the global ctx so renderCard draws to the temp canvas
+      const originalCtx = ctx;
+      // We need to make renderCard use the temp context – simplest is to re-assign
+      // but because ctx is const, we'll call a dedicated render function.
+
+      try {
+        for (const suit of SUITS) {
+          for (const rank of RANKS) {
+            currentSuit = suit.id;
+            currentRank = rank;
+
+            // Render onto temp canvas
+            renderCardToContext(tempCtx, tempCanvas.width, tempCanvas.height);
+
+            // Convert to blob
+            const dataUrl = tempCanvas.toDataURL("image/png");
+            const base64 = dataUrl.split(",")[1];
+            const filename = `${rank}_of_${suit.id}.png`.toLowerCase();
+            folder.file(filename, base64, { base64: true });
+          }
+        }
+
+        setStatus("Compressing ZIP…", false);
+        const blob = await zip.generateAsync({ type: "blob" }, (meta) => {
+          // optional progress
+        });
+
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "character-card-deck.zip";
+        link.click();
+        URL.revokeObjectURL(link.href);
+
+        setStatus("Full deck downloaded!", false);
+      } catch (err) {
+        console.error(err);
+        setStatus("Failed to create ZIP: " + err.message, true);
+      } finally {
+        // Restore original selection and redraw
+        currentSuit = originalSuit;
+        currentRank = originalRank;
+        renderCard();
+        downloadAllBtn.disabled = false;
+        downloadAllBtn.innerHTML = "⬇ Full Deck (ZIP)";
+      }
+    });
+
+    // Helper: render the current card onto any 2d context
+    function renderCardToContext(targetCtx, W, H) {
+      // Temporarily replace the global ctx used by the drawing functions
+      // We do this by monkey-patching the drawing calls for this render only.
+      // Simpler approach: duplicate the core drawing with the passed context.
+      // For cleanliness we'll just call the same logic using the passed context.
+
+      const suitObj = SUITS.find(s => s.id === currentSuit);
+      const color = suitObj.hex;
+      const isFace = ["J","Q","K"].includes(currentRank);
+
+      // Background
+      targetCtx.clearRect(0, 0, W, H);
+      targetCtx.fillStyle = "#f8fafc";
+      roundRect(targetCtx, 0, 0, W, H, 28);
+      targetCtx.fill();
+
+      // Full-card character image (low opacity)
+      targetCtx.save();
+      roundRect(targetCtx, 0, 0, W, H, 28);
+      targetCtx.clip();
+      targetCtx.globalAlpha = 0.20;
+      drawImageCover(targetCtx, characterImage, 0, 0, W, H);
+      targetCtx.restore();
+
+      // Border
+      targetCtx.strokeStyle = "rgba(0,0,0,0.10)";
+      targetCtx.lineWidth = 3;
+      roundRect(targetCtx, 10, 10, W - 20, H - 20, 22);
+      targetCtx.stroke();
+
+      // Corners
+      drawCornerRankOn(targetCtx, currentRank, suitObj.symbol, color, 56, 78, false);
+      drawCornerRankOn(targetCtx, currentRank, suitObj.symbol, color, W - 56, H - 78, true);
+
+      if (isFace) {
+        renderFaceCardOn(targetCtx, W, H, suitObj, color);
+      } else {
+        renderNumberCardOn(targetCtx, W, H, suitObj, color);
+      }
+    }
+
+    function drawCornerRankOn(c, rank, symbol, color, x, y, inverted) {
+      c.save();
+      c.translate(x, y);
+      if (inverted) c.rotate(Math.PI);
+      c.fillStyle = color;
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.font = "bold 78px Georgia, 'Times New Roman', serif";
+      c.fillText(rank, 0, -26);
+      c.font = "64px Georgia, serif";
+      c.fillText(symbol, 0, 36);
+      c.restore();
+    }
+
+    function renderNumberCardOn(c, W, H, suitObj, color) {
+      const layout = PIP_LAYOUTS[currentRank] || PIP_LAYOUTS["A"];
+      const isAce = currentRank === "A";
+      let baseSize;
+      if (isAce) baseSize = 250;
+      else if (currentRank === "10") baseSize = 104;
+      else if (["8","9"].includes(currentRank)) baseSize = 112;
+      else baseSize = 124;
+
+      layout.forEach(([nx, ny, inv]) => {
+        drawSolidPipOn(c, suitObj.id, color, nx * W, ny * H, baseSize, !!inv);
+      });
+    }
+
+    function drawSolidPipOn(c, suitId, color, cx, cy, size, inverted) {
+      c.save();
+      c.translate(cx, cy);
+      if (inverted) c.rotate(Math.PI);
+      c.scale(size, size);
+      const pathFn = getSuitPath(suitId);
+      pathFn(c);
+      c.fillStyle = color;
+      c.fill();
+      c.strokeStyle = color;
+      c.lineWidth = 0.035;
+      c.lineJoin = "round";
+      c.lineCap = "round";
+      c.stroke();
+      c.restore();
+    }
+
+    function renderFaceCardOn(c, W, H, suitObj, color) {
+      const name = currentRank === "J" ? "JACK" : currentRank === "Q" ? "QUEEN" : "KING";
+
+      c.fillStyle = color;
+      c.font = "bold 68px Georgia, serif";
+      c.textAlign = "center";
+      c.fillText(name, W / 2, 125);
+      c.save();
+      c.translate(W / 2, H - 115);
+      c.rotate(Math.PI);
+      c.fillText(name, 0, 0);
+      c.restore();
+
+      const frameW = 400;
+      const frameH = 640;
+      const frameX = (W - frameW) / 2;
+      const frameY = (H - frameH) / 2;
+      const halfH = (frameH / 2) - 6;
+
+      c.strokeStyle = color;
+      c.lineWidth = 7;
+      roundRect(c, frameX - 5, frameY - 5, frameW + 10, frameH + 10, 12);
+      c.stroke();
+
+      c.strokeStyle = "rgba(0,0,0,0.12)";
+      c.lineWidth = 2.5;
+      roundRect(c, frameX, frameY, frameW, frameH, 8);
+      c.stroke();
+
+      // Top half
+      c.save();
+      roundRect(c, frameX + 5, frameY + 5, frameW - 10, halfH, 5);
+      c.clip();
+      c.globalAlpha = 0.92;
+      drawImageCover(c, characterImage, frameX + 5, frameY + 5, frameW - 10, halfH);
+      c.restore();
+
+      // Bottom half (reflected)
+      c.save();
+      roundRect(c, frameX + 5, frameY + halfH + 12, frameW - 10, halfH, 5);
+      c.clip();
+      c.translate(frameX + frameW / 2, frameY + halfH + 12 + halfH / 2);
+      c.rotate(Math.PI);
+      c.globalAlpha = 0.92;
+      drawImageCover(c, characterImage, -(frameW - 10) / 2, -halfH / 2, frameW - 10, halfH);
+      c.restore();
+
+      // Side suits
+      c.fillStyle = color;
+      c.font = "92px Georgia, serif";
+      c.textAlign = "center";
+      c.fillText(suitObj.symbol, frameX - 38, H / 2 + 10);
+      c.fillText(suitObj.symbol, frameX + frameW + 38, H / 2 + 10);
+    }
 
     // ===================== STATUS =====================
     function setStatus(msg, isError) {
